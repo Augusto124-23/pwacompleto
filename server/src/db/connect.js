@@ -1,29 +1,44 @@
-// src/db/connect.js — conexión cacheada (segura en serverless)
 import mongoose from "mongoose";
 
 let cached = global._mongooseConn;
-if (!cached) cached = global._mongooseConn = { conn: null, promise: null };
+
+if (!cached) {
+  cached = global._mongooseConn = {
+    conn: null,
+    promise: null,
+  };
+}
 
 export async function connectToDB() {
-  if (cached.conn) return cached.conn;
+  if (cached.conn && mongoose.connection.readyState === 1) {
+    return cached.conn;
+  }
 
   if (!cached.promise) {
     const { MONGO_URI } = process.env;
-    if (!MONGO_URI) throw new Error("Falta MONGO_URI");
+
+    if (!MONGO_URI) {
+      throw new Error("Falta MONGO_URI en las variables de entorno");
+    }
+
+    console.log("Intentando conectar a MongoDB Atlas...");
 
     cached.promise = mongoose
       .connect(MONGO_URI, {
         dbName: "BackPWA",
-        // En Vercel no construimos índices en cada arranque en frío;
-        // se crean una vez con `npm run db:indexes`.
         autoIndex: !process.env.VERCEL,
+        serverSelectionTimeoutMS: 8000,
+        connectTimeoutMS: 8000,
       })
-      .then((m) => m.connection)
-      .catch((err) => {
-        // Si falla, borramos la promesa para que el siguiente request reintente.
-        // (Antes, una falla dejaba la API rota hasta el siguiente cold start.)
+      .then((mongooseInstance) => {
+        console.log("MongoDB conectado correctamente");
+        return mongooseInstance.connection;
+      })
+      .catch((error) => {
+        console.error("Error de conexión MongoDB:", error.message);
         cached.promise = null;
-        throw err;
+        cached.conn = null;
+        throw error;
       });
   }
 
