@@ -11,7 +11,10 @@ import pushRoutes from './routes/push.routes.js'; // <-- NUEVO
 
 // Crear la aplicación de express
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: ['https://pwacompleto-1m7z.vercel.app', 'http://localhost:5173'],
+  credentials: true
+}));
 app.use(express.json());
 app.use(morgan('dev'));
 
