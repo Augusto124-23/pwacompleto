@@ -7,12 +7,16 @@ import morgan from 'morgan';
 // Importar rutas
 import authRoutes from './routes/auth.routes.js';
 import taskRoutes from './routes/task.routes.js';
-import pushRoutes from './routes/push.routes.js'; // <-- NUEVO
+import pushRoutes from './routes/push.routes.js';
 
 // Crear la aplicación de express
 const app = express();
 app.use(cors({
-  origin: ['https://pwacompleto-1m7z.vercel.app', 'http://localhost:5173'],
+  origin: [
+    'https://pwa-lime-two.vercel.app',
+    'https://pwacompleto-1m7z.vercel.app',
+    'http://localhost:5173'
+  ],
   credentials: true
 }));
 app.use(express.json());
@@ -21,7 +25,7 @@ app.use(morgan('dev'));
 app.get('/', (req, res) => res.json({ok: true, name: 'todo-pwa-api'}));
 app.use('/api/tasks', taskRoutes);
 app.use('/api/auth', authRoutes);
-app.use('/api/push', pushRoutes); // <-- NUEVO (Rutas para notificaciones)
+app.use('/api/push', pushRoutes);
 
 const {PORT = 4000, MONGODB_URI} = process.env;
 
