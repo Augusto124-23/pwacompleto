@@ -1,12 +1,26 @@
 import { useEffect, useState } from "react";
-import { onToast, type ToastItem } from "../toast";
+
+type ToastItem = {
+  id: string | number;
+  kind: string;
+  message: string;
+};
+
+function onToast(callback: (toast: ToastItem) => void) {
+  const handleToast = (event: Event) => {
+    callback((event as CustomEvent<ToastItem>).detail);
+  };
+
+  window.addEventListener("toast", handleToast);
+  return () => window.removeEventListener("toast", handleToast);
+}
 
 export default function Toaster() {
   const [items, setItems] = useState<ToastItem[]>([]);
 
   useEffect(
     () =>
-      onToast((t) => {
+      onToast((t: ToastItem) => {
         setItems((prev) => [...prev, t]);
         setTimeout(() => setItems((prev) => prev.filter((x) => x.id !== t.id)), 3500);
       }),
