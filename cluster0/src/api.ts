@@ -1,21 +1,21 @@
 import axios from "axios";
 
 export const api = axios.create({
-    baseURL: import.meta.env.VITE_API_URL,
+    baseURL: import.meta.env.VITE_API_URL || "https://pwacompleto-dun.vercel.app/api",
     timeout: 15_000,
-})
+});
 
 export function setAuth(token: string | null){
     if (token) api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
     else delete api.defaults.headers.common["Authorization"];
 }
 
-
 setAuth(localStorage.getItem("token"));
+
 api.interceptors.response.use(
     (r) => r,
     (err) => {
-        const url = String = err.config?.url ?? "";
+        const url = String(err.config?.url ?? "");
         if (err.response?.status === 401 && !url.startsWith("/auth")) {
             localStorage.removeItem("token");
             setAuth(null);
