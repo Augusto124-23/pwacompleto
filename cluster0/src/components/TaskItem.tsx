@@ -10,29 +10,41 @@ type Props = {
   onRemove: (id: string) => void;
 };
 
-// memo: si la tarea no cambió, React no vuelve a dibujar este renglón
+// Función auxiliar segura para convertir dueDate a string o null para los inputs
+function getDueDateString(dueDate: Task["dueDate"]): string | null {
+  if (!dueDate) return null;
+  if (typeof dueDate === "string") return dueDate;
+  if (dueDate instanceof Date) return dueDate.toISOString();
+  return null;
+}
+
 function TaskItem({ task, onUpdate, onRemove }: Props) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(task.title);
-  const [description, setDescription] = useState(task.description);
-  const [priority, setPriority] = useState<Priority>(task.priority);
-  const [due, setDue] = useState(toLocalInput(task.dueDate));
+  const [description, setDescription] = useState(task.description ?? "");
+  const [priority, setPriority] = useState<Priority>(task.priority ?? "Media");
+  const [due, setDue] = useState(toLocalInput(getDueDateString(task.dueDate)));
 
   const done = isDone(task);
   const overdue = isOverdue(task);
 
   function startEdit() {
     setTitle(task.title);
-    setDescription(task.description);
-    setPriority(task.priority);
-    setDue(toLocalInput(task.dueDate));
+    setDescription(task.description ?? "");
+    setPriority(task.priority ?? "Media");
+    setDue(toLocalInput(getDueDateString(task.dueDate)));
     setEditing(true);
   }
 
   function save() {
     const t = title.trim();
     if (!t) return;
-    onUpdate(task._id, { title: t, description: description.trim(), priority, dueDate: fromLocalInput(due) });
+    onUpdate(task._id, { 
+      title: t, 
+      description: description.trim(), 
+      priority, 
+      dueDate: fromLocalInput(due) 
+    });
     setEditing(false);
   }
 
@@ -44,14 +56,21 @@ function TaskItem({ task, onUpdate, onRemove }: Props) {
     }
   }
 
-  const classes = ["task", `prio-${task.priority.toLowerCase()}`, done && "is-done", overdue && "is-overdue"]
+  const classes = ["task", `prio-${(task.priority ?? "Media").toLowerCase()}`, done && "is-done", overdue && "is-overdue"]
     .filter(Boolean).join(" ");
+
+  const dueDateStr = getDueDateString(task.dueDate);
+  // Tipado estricto asegurado para el estado actual de la tarea
+  const currentStatus: Status = (STATUSES.includes(task.status as Status) ? task.status : "Pendiente") as Status;
 
   return (
     <li className={classes}>
       <button
         className="check"
-        onClick={() => onUpdate(task._id, { status: done ? "Pendiente" : "Completada" })}
+        onClick={() => onUpdate(task._id, { 
+          status: done ? "Pendiente" : "Completada",
+          priority: task.priority ?? "Media" 
+        })}
         aria-label={done ? `Marcar "${task.title}" como pendiente` : `Completar "${task.title}"`}
         aria-pressed={done}
       >
@@ -84,18 +103,21 @@ function TaskItem({ task, onUpdate, onRemove }: Props) {
             {task.description && <p className="task-desc">{task.description}</p>}
             <div className="task-meta">
               <select
-                className={`status status-${statusSlug(task.status)}`}
-                value={task.status}
-                onChange={(e) => onUpdate(task._id, { status: e.target.value as Status })}
+                className={`status status-${statusSlug(currentStatus)}`}
+                value={currentStatus}
+                onChange={(e) => onUpdate(task._id, { 
+                  status: e.target.value as Status,
+                  priority: task.priority ?? "Media"
+                })}
                 aria-label="Estado"
               >
                 {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
-              <span className="prio-tag">{task.priority}</span>
-              {task.dueDate && (
-                <span className={`due ${overdue ? "due-overdue" : ""}`} title={dueAbsolute(task.dueDate)}>
+              <span className="prio-tag">{task.priority ?? "Media"}</span>
+              {dueDateStr && (
+                <span className={`due ${overdue ? "due-overdue" : ""}`} title={dueAbsolute(dueDateStr)}>
                   <IconClock width={14} height={14} />
-                  {overdue ? `Venció ${dueRelative(task.dueDate)}` : `Vence ${dueRelative(task.dueDate)}`}
+                  {overdue ? `Venció ${dueRelative(dueDateStr)}` : `Vence ${dueRelative(dueDateStr)}`}
                 </span>
               )}
               {task.pending && <span className="unsynced" title="Este cambio aún no llega al servidor">Sin sincronizar</span>}

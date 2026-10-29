@@ -9,7 +9,9 @@
     "db:indexes": "node scripts/sync-indexes.js",
     "vapid": "web-push generate-vapid-keys"
   },
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",

@@ -76,8 +76,14 @@ export function useTasks() {
     async (input: TaskInput) => {
       const id = newId();
       const task: Task = {
-        ...input, _id: id, clienteId: id, status: "Pendiente",
-        createdAt: new Date().toISOString(), pending: true,
+        ...input,
+        _id: id,
+        clienteId: id,
+        status: "Pendiente",
+        priority: input.priority || "Media", // Forzamos un valor válido predeterminado
+        dueDate: input.dueDate || null,      // Forzamos la fecha o null
+        createdAt: new Date().toISOString(),
+        pending: true,
       };
       setTasks((prev) => [task, ...prev]);
       await queueCreate(task);

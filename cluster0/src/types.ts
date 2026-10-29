@@ -1,19 +1,24 @@
 export type Filter = "all" | "active" | "completed" | "overdue";
 
-export type Sort = "recent" | "oldest" | "alphabetical" | "dueDate";
+export type Sort = "recent" | "oldest" | "alphabetical" | "dueDate" | "priority"; // <-- Añadido aquí
 
-// Agrega estas constantes que te está reclamando la consola:
-export const PRIORITIES = ["baja", "media", "alta"] as const; // O los valores que utilices en tu app
-export const STATUSES = ["Pendiente", "En proceso", "Completada"] as const;
+// Alineado con las mayúsculas de tu modelo de Mongoose
+export const PRIORITIES = ["Baja", "Media", "Alta"] as const; 
+export type Priority = typeof PRIORITIES[number];
+
+export const STATUSES = ["Pendiente", "En Progreso", "Completada"] as const;
+export type Status = typeof STATUSES[number];
 
 export interface Task {
   _id: string;
   title: string;
+  description?: string;
   completed?: boolean;
   clienteId?: string;
   status?: string;
+  priority?: Priority;
   pending?: boolean;
-  dueDate?: string | Date;
+  dueDate?: string | Date | null;
   createdAt?: string | Date;
 }
 

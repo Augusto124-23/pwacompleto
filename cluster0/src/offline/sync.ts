@@ -2,6 +2,7 @@
 // para modificar datos; solo encola, y este módulo se encarga de enviar.
 import axios from "axios";
 import { api } from "../api";
+import { parsePriorityFrontend } from "../utils/tasks";
 import { getOutbox, removeOp, setMapping } from "./db";
 
 let running: Promise<boolean> | null = null;
@@ -50,7 +51,16 @@ async function runOnce(): Promise<boolean> {
     if (creates.length) {
       const { data } = await api.post<{ mapping: { clienteId: string; serverId: string }[] }>(
         "/tasks/bulksync",
-        { tasks: creates.map((o) => ({ ...o.data, clienteId: o.clienteId })) }
+        {
+          tasks: creates.map((o) => ({
+            title: o.data.title,
+            description: o.data.description,
+            status: o.data.status,
+            priority: parsePriorityFrontend(o.data.priority),
+            dueDate: o.data.dueDate ?? null,
+            clienteId: o.clienteId,
+          })),
+        }
       );
       for (const m of data.mapping ?? []) await setMapping(m.clienteId, m.serverId);
       for (const o of creates) await removeOp(o);
@@ -60,8 +70,15 @@ async function runOnce(): Promise<boolean> {
     for (const o of ops) {
       if (o.op === "create") continue;
       try {
-        if (o.op === "update") await api.put(`/tasks/${o.serverId}`, o.data);
-        else await api.delete(`/tasks/${o.serverId}`);
+        if (o.op === "update") {
+          await api.put(`/tasks/${o.serverId}`, {
+            ...o.data,
+            priority: parsePriorityFrontend(o.data.priority),
+            dueDate: o.data.dueDate,
+          });
+        } else {
+          await api.delete(`/tasks/${o.serverId}`);
+        }
         await removeOp(o);
       } catch (e) {
         if (isPermanent(e)) await removeOp(o); // p. ej. 404: ya no existe, se descarta

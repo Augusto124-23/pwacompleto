@@ -1,21 +1,34 @@
 import Task from "../models/Task.js";
-const allowed = ["Pendiente", "En Progreso", "Completada"];
+
+const allowedStatuses = ["Pendiente", "En Progreso", "Completada"];
+
+function parsePriority(p) {
+  if (!p) return "Media";
+  // Si por error llega un objeto o evento, intentamos extraer su valor
+  const val = typeof p === "object" && p !== null ? (p.value ?? p.target?.value ?? "Media") : p;
+  const lower = String(val).toLowerCase().trim();
+  if (lower === "alta") return "Alta";
+  if (lower === "baja") return "Baja";
+  if (lower === "media") return "Media";
+  return "Media";
+}
 
 export async function list(req, res) {
   const items = await Task.find({ user: req.userId, deleted: false }).sort({ createdAt: -1 });
-  // puedes dejar {items} si ya tienes el front normalizando
   res.json({ items });
 }
 
 export async function create(req, res) {
-  const { title, description = "", status = "Pendiente", clienteId } = req.body;
+  const { title, description = "", status = "Pendiente", priority, dueDate, clienteId } = req.body;
   if (!title) return res.status(400).json({ message: "El título es requerido" });
 
   const task = await Task.create({
     user: req.userId,
     title,
     description,
-    status: allowed.includes(status) ? status : "Pendiente",
+    status: allowedStatuses.includes(status) ? status : "Pendiente",
+    priority: parsePriority(priority),
+    dueDate: dueDate ? new Date(dueDate) : null,
     clienteId,
   });
 
@@ -24,14 +37,13 @@ export async function create(req, res) {
 
 export async function update(req, res) {
   const { id } = req.params;
-  let { title, description, status, completed } = req.body;
+  let { title, description, status, completed, priority, dueDate } = req.body;
 
-  // Soporta front que manda completed:boolean
   if (typeof completed === "boolean") {
     status = completed ? "Completada" : "Pendiente";
   }
 
-  if (status && !allowed.includes(status)) {
+  if (status && !allowedStatuses.includes(status)) {
     return res.status(400).json({ message: "Estado inválido" });
   }
 
@@ -39,6 +51,8 @@ export async function update(req, res) {
   if (typeof title === "string") set.title = title.trim();
   if (typeof description === "string") set.description = description.trim();
   if (status) set.status = status;
+  if (priority !== undefined) set.priority = parsePriority(priority);
+  if (dueDate !== undefined) set.dueDate = dueDate ? new Date(dueDate) : null;
 
   const task = await Task.findOneAndUpdate(
     { _id: id, user: req.userId },
@@ -61,7 +75,7 @@ export async function remove(req, res) {
   res.json({ ok: true });
 }
 
-/** Sincronización offline */
+/** Sincronización offline (bulksync) */
 export async function bulksync(req, res) {
   const { tasks = [] } = req.body;
   const mapping = [];
@@ -69,19 +83,27 @@ export async function bulksync(req, res) {
   for (const t of tasks) {
     if (!t?.clienteId || !t?.title) continue;
 
+    const cleanPriority = parsePriority(t.priority);
+    const cleanDueDate = t.dueDate ? new Date(t.dueDate) : null;
+    const cleanStatus = allowedStatuses.includes(t.status) ? t.status : "Pendiente";
+
     let doc = await Task.findOne({ user: req.userId, clienteId: t.clienteId });
     if (!doc) {
       doc = await Task.create({
         user: req.userId,
         title: t.title,
         description: t.description ?? "",
-        status: allowed.includes(t.status) ? t.status : "Pendiente",
+        status: cleanStatus,
+        priority: cleanPriority,
+        dueDate: cleanDueDate,
         clienteId: t.clienteId,
       });
     } else {
       doc.title = t.title ?? doc.title;
       doc.description = t.description ?? doc.description;
-      if (t.status && allowed.includes(t.status)) doc.status = t.status;
+      doc.status = cleanStatus;
+      doc.priority = cleanPriority;
+      doc.dueDate = cleanDueDate;
       await doc.save();
     }
 
