@@ -1,52 +1,90 @@
 import webpush from "web-push";
 import PushSubscription from "../models/PushSubscription.js";
 
-let configured = null;
+let configured = false;
 
-/** true si hay llaves VAPID configuradas. Configura web-push la primera vez. */
 export function pushEnabled() {
-  if (configured !== null) return configured;
-  const { VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT } = process.env;
-  configured = Boolean(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY);
-  if (configured) {
-    // Apple rechaza subjects falsos: usa un mailto: real o la URL de tu sitio.
-    webpush.setVapidDetails(VAPID_SUBJECT || "mailto:2123200542@soy.utj.edu.mx", VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+  if (configured) return true;
+
+  const publicKey = process.env.VAPID_PUBLIC_KEY?.trim();
+  const privateKey = process.env.VAPID_PRIVATE_KEY?.trim();
+
+  let subject = (
+    process.env.VAPID_SUBJECT ||
+    "2123200542@soy.utj.edu.mx"
+  ).trim();
+
+  // Corrige un correo configurado sin el prefijo mailto:
+  if (!subject.includes(":") && subject.includes("@")) {
+    subject = `mailto:${subject}`;
   }
-  return configured;
+
+  if (!publicKey || !privateKey) {
+    return false;
+  }
+
+  webpush.setVapidDetails(subject, publicKey, privateKey);
+
+  // Solo queda configurado si setVapidDetails terminó correctamente.
+  configured = true;
+  return true;
 }
 
-/**
- * Envía `payload` a todos los dispositivos del usuario.
- * payload: { title, body, url?, tag? }  → lo recibe el evento "push" del service worker.
- */
 export async function sendToUser(userId, payload) {
-  const result = { sent: 0, removed: 0, failed: 0 };
+  const result = {
+    sent: 0,
+    removed: 0,
+    failed: 0,
+  };
+
   if (!pushEnabled()) return result;
 
   const subs = await PushSubscription.find({ user: userId });
   const body = JSON.stringify(payload);
 
   const outcomes = await Promise.allSettled(
-    subs.map((s) =>
-      webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys }, body, { TTL: 60 * 60 })
+    subs.map((subscription) =>
+      webpush.sendNotification(
+        {
+          endpoint: subscription.endpoint,
+          keys: subscription.keys,
+        },
+        body,
+        { TTL: 60 * 60 }
+      )
     )
   );
 
   const dead = [];
-  outcomes.forEach((o, i) => {
-    if (o.status === "fulfilled") return void result.sent++;
-    const code = o.reason?.statusCode;
-    // 404/410 = la suscripción ya no existe (el usuario la revocó o desinstaló la app)
-    if (code === 404 || code === 410) dead.push(subs[i]._id);
-    else {
+
+  outcomes.forEach((outcome, index) => {
+    if (outcome.status === "fulfilled") {
+      result.sent++;
+      return;
+    }
+
+    const code = outcome.reason?.statusCode;
+
+    if (code === 404 || code === 410) {
+      dead.push(subs[index]._id);
+    } else {
       result.failed++;
-      console.error("web-push error:", code, o.reason?.body || o.reason?.message);
+
+      console.error(
+        "web-push error:",
+        code,
+        outcome.reason?.body || outcome.reason?.message
+      );
     }
   });
 
   if (dead.length) {
-    await PushSubscription.deleteMany({ _id: { $in: dead } });
+    await PushSubscription.deleteMany({
+      _id: { $in: dead },
+    });
+
     result.removed = dead.length;
   }
+
   return result;
 }
